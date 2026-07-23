@@ -9,14 +9,14 @@
 
 // Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyAnf1gsGruFz7j75PcUik_1aIoW2pCA0sg",
-    authDomain: "building-bills.firebaseapp.com",
-    databaseURL: "https://building-bills-default-rtdb.firebaseio.com",
-    projectId: "building-bills",
-    storageBucket: "building-bills.firebasestorage.app",
-    messagingSenderId: "392605126029",
-    appId: "1:392605126029:web:898526b591e8bbd8ce01c4",
-    measurementId: "G-K7YFP5TH3T"
+    apiKey: "AIzaSyCnE92P9Yxi5FL01aJae9Ky83lsZ76LBLI",
+    authDomain: "abdali-34515.firebaseapp.com",
+    databaseURL: "https://abdali-34515-default-rtdb.firebaseio.com",
+    projectId: "abdali-34515",
+    storageBucket: "abdali-34515.firebasestorage.app",
+    messagingSenderId: "944530492505",
+    appId: "1:944530492505:web:65be948eb0aed249193548",
+    measurementId: "G-HQVR6ESGBK"
 };
 
 // Initialize Firebase
