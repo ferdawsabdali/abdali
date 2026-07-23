@@ -7,6 +7,29 @@
 // DATA MANAGEMENT
 // ============================
 
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyAnf1gsGruFz7j75PcUik_1aIoW2pCA0sg",
+    authDomain: "building-bills.firebaseapp.com",
+    databaseURL: "https://building-bills-default-rtdb.firebaseio.com",
+    projectId: "building-bills",
+    storageBucket: "building-bills.firebasestorage.app",
+    messagingSenderId: "392605126029",
+    appId: "1:392605126029:web:898526b591e8bbd8ce01c4",
+    measurementId: "G-K7YFP5TH3T"
+};
+
+// Initialize Firebase
+let firebaseApp;
+let dbRef;
+try {
+    firebaseApp = firebase.initializeApp(firebaseConfig);
+    dbRef = firebase.database().ref('building_bills');
+    console.log('Firebase initialized successfully');
+} catch (e) {
+    console.error('Firebase init error:', e);
+}
+
 const DB_KEYS = {
     UNITS: 'building_bills_units',
     READINGS: 'building_bills_readings',
@@ -66,27 +89,111 @@ const DEFAULT_SETTINGS = {
     address: ''
 };
 
-// Storage helpers
-function getData(key, defaultValue = null) {
-    try {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : defaultValue;
-    } catch (e) {
-        console.error('Error reading localStorage:', e);
-        return defaultValue;
+// Local cache synced with Firebase
+const localCache = {};
+let firebaseReady = false;
+let pendingWrites = 0;
+
+function updateSyncIndicator() {
+    let el = document.getElementById('sync-indicator');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'sync-indicator';
+        el.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;padding:4px 10px;border-radius:12px;font-size:12px;font-family:Vazirmatn,sans-serif;transition:all 0.3s;';
+        document.body.appendChild(el);
+    }
+    if (!dbRef) {
+        el.textContent = '⚠️ پایگاه داده محلی';
+        el.style.background = '#fff3cd';
+        el.style.color = '#856404';
+        return;
+    }
+    if (pendingWrites > 0) {
+        el.textContent = '⏳ در حال ذخیره‌سازی...';
+        el.style.background = '#cce5ff';
+        el.style.color = '#004085';
+    } else if (firebaseReady) {
+        el.textContent = '✓ همگام‌سازی شده';
+        el.style.background = '#d4edda';
+        el.style.color = '#155724';
+    } else {
+        el.textContent = '🔄 در حال اتصال...';
+        el.style.background = '#e2e3e5';
+        el.style.color = '#383d41';
     }
 }
 
 function setData(key, value) {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-        console.error('Error writing localStorage:', e);
+    localCache[key] = value;
+    localStorage.setItem(key, JSON.stringify(value));
+    if (dbRef) {
+        pendingWrites++;
+        updateSyncIndicator();
+        dbRef.child(key).set(value).then(() => {
+            pendingWrites--;
+            updateSyncIndicator();
+        }).catch(err => {
+            console.error('Firebase write error:', err);
+            pendingWrites--;
+            updateSyncIndicator();
+        });
     }
 }
 
+function getData(key, defaultValue = null) {
+    if (localCache.hasOwnProperty(key)) return localCache[key];
+    try {
+        const data = localStorage.getItem(key);
+        if (data) {
+            localCache[key] = JSON.parse(data);
+            return localCache[key];
+        }
+    } catch (e) {
+        console.error('Error reading localStorage:', e);
+    }
+    return defaultValue;
+}
+
+// Initialize Firebase listeners for real-time sync
+let renderTimeout = null;
+function debouncedRender() {
+    if (renderTimeout) clearTimeout(renderTimeout);
+    renderTimeout = setTimeout(() => {
+        renderDashboard();
+        renderUnits();
+        renderReadingsHistory();
+        loadSettings();
+        updatePeriodSelects();
+    }, 300);
+}
+
+function initFirebaseSync() {
+    if (!dbRef) {
+        updateSyncIndicator();
+        return;
+    }
+    Object.values(DB_KEYS).forEach(key => {
+        dbRef.child(key).on('value', snapshot => {
+            const val = snapshot.val();
+            if (val !== null) {
+                localCache[key] = val;
+                localStorage.setItem(key, JSON.stringify(val));
+                debouncedRender();
+            }
+            firebaseReady = true;
+            updateSyncIndicator();
+        });
+    });
+    dbRef.child('.info/connected').on('value', snap => {
+        if (snap.val() === true) {
+            firebaseReady = true;
+            updateSyncIndicator();
+        }
+    });
+}
+
 function getUnits() {
-    return getData(DB_KEYS.UNITS, DEFAULT_UNITS);
+    return getData(DB_KEYS.UNITS, JSON.parse(JSON.stringify(DEFAULT_UNITS)));
 }
 
 function saveUnits(units) {
@@ -110,7 +217,7 @@ function saveBills(bills) {
 }
 
 function getSettings() {
-    return getData(DB_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    return getData(DB_KEYS.SETTINGS, JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
 }
 
 function saveSettingsData(settings) {
@@ -1163,6 +1270,9 @@ function showToast(message) {
 }
 
 function init() {
+    // Start Firebase real-time sync
+    initFirebaseSync();
+
     // Initialize default units if none exist
     if (!getData(DB_KEYS.UNITS)) {
         saveUnits(DEFAULT_UNITS);
