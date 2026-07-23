@@ -20,14 +20,20 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let firebaseApp;
-let dbRef;
+let firebaseApp = null;
+let dbRef = null;
+let firebaseError = null;
 try {
-    firebaseApp = firebase.initializeApp(firebaseConfig);
-    dbRef = firebase.database().ref('building_bills');
-    console.log('Firebase initialized successfully');
+    if (typeof firebase !== 'undefined') {
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        dbRef = firebase.database().ref('building_bills');
+        console.log('✅ Firebase initialized');
+    } else {
+        throw new Error('Firebase library not loaded');
+    }
 } catch (e) {
-    console.error('Firebase init error:', e);
+    firebaseError = e.message;
+    console.error('❌ Firebase init error:', e);
 }
 
 const DB_KEYS = {
@@ -99,11 +105,19 @@ function updateSyncIndicator() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'sync-indicator';
-        el.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;padding:4px 10px;border-radius:12px;font-size:12px;font-family:Vazirmatn,sans-serif;transition:all 0.3s;';
+        el.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;padding:4px 10px;border-radius:12px;font-size:12px;font-family:Vazirmatn,sans-serif;transition:all 0.3s;cursor:pointer;';
+        el.title = 'برای بررسی وضعیت کلیک کنید';
+        el.onclick = showDiagnostics;
         document.body.appendChild(el);
     }
+    if (firebaseError) {
+        el.textContent = '❌ خطای Firebase';
+        el.style.background = '#f8d7da';
+        el.style.color = '#721c24';
+        return;
+    }
     if (!dbRef) {
-        el.textContent = '⚠️ پایگاه داده محلی';
+        el.textContent = '⚠️ اتصال Firebase برقرار نیست';
         el.style.background = '#fff3cd';
         el.style.color = '#856404';
         return;
@@ -123,9 +137,28 @@ function updateSyncIndicator() {
     }
 }
 
+function showDiagnostics() {
+    const existing = document.getElementById('diag-panel');
+    if (existing) { existing.remove(); return; }
+    const panel = document.createElement('div');
+    panel.id = 'diag-panel';
+    panel.style.cssText = 'position:fixed;top:40px;left:10px;z-index:9998;background:#fff;border:1px solid #ddd;border-radius:8px;padding:15px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:Vazirmatn,sans-serif;font-size:13px;max-width:320px;line-height:1.8;direction:rtl;text-align:right;';
+    const checks = [
+        ['کتابخانه Firebase', typeof firebase !== 'undefined' ? '✅ بارگذاری شد' : '❌ بارگذاری نشد'],
+        ['مقداردهی Firebase', firebaseApp ? '✅ انجام شد' : '❌ انجام نشد'],
+        ['اتصال دیتابیس', dbRef ? '✅ برقرار است' : '❌ برقرار نیست'],
+        ['خطا', firebaseError || 'ندارد'],
+        ['وضعیت همگام', firebaseReady ? '✅ متصل' : '⏳ در انتظار'],
+        ['ذخیره‌سازی محلی', '❌ غیرفعال (فقط Firebase)']
+    ];
+    panel.innerHTML = '<strong>🔍 بررسی وضعیت</strong><hr style="margin:8px 0;border:none;border-top:1px solid #eee;">' +
+        checks.map(([k,v]) => `<div><span style="color:#666">${k}:</span> <span style="font-weight:600">${v}</span></div>`).join('');
+    document.body.appendChild(panel);
+    setTimeout(() => { if(document.getElementById('diag-panel')) panel.remove(); }, 8000);
+}
+
 function setData(key, value) {
     localCache[key] = value;
-    localStorage.setItem(key, JSON.stringify(value));
     if (dbRef) {
         pendingWrites++;
         updateSyncIndicator();
@@ -142,15 +175,6 @@ function setData(key, value) {
 
 function getData(key, defaultValue = null) {
     if (localCache.hasOwnProperty(key)) return localCache[key];
-    try {
-        const data = localStorage.getItem(key);
-        if (data) {
-            localCache[key] = JSON.parse(data);
-            return localCache[key];
-        }
-    } catch (e) {
-        console.error('Error reading localStorage:', e);
-    }
     return defaultValue;
 }
 
@@ -173,14 +197,32 @@ function initFirebaseSync() {
         return;
     }
     Object.values(DB_KEYS).forEach(key => {
+        // First check if data exists; if not, seed defaults
+        dbRef.child(key).once('value').then(snapshot => {
+            if (snapshot.val() === null) {
+                if (key === DB_KEYS.UNITS) {
+                    dbRef.child(key).set(DEFAULT_UNITS);
+                } else if (key === DB_KEYS.SETTINGS) {
+                    dbRef.child(key).set(DEFAULT_SETTINGS);
+                }
+                // READINGS, BILLS, LAST_READING stay empty
+            }
+        }).catch(err => {
+            console.error('Firebase once error for', key, err);
+        });
+
+        // Real-time listener
         dbRef.child(key).on('value', snapshot => {
             const val = snapshot.val();
             if (val !== null) {
                 localCache[key] = val;
-                localStorage.setItem(key, JSON.stringify(val));
                 debouncedRender();
             }
             firebaseReady = true;
+            updateSyncIndicator();
+        }, err => {
+            console.error('Firebase read error for', key, err);
+            firebaseReady = false;
             updateSyncIndicator();
         });
     });
@@ -189,7 +231,7 @@ function initFirebaseSync() {
             firebaseReady = true;
             updateSyncIndicator();
         }
-    });
+    }, () => {});
 }
 
 function getUnits() {
@@ -662,7 +704,10 @@ function deleteReading(id) {
     // If deleted reading was the lastReading, clear it
     const last = getLastReading();
     if (last && last.id === id) {
-        localStorage.removeItem(DB_KEYS.LAST_READING);
+        if (dbRef) {
+            dbRef.child(DB_KEYS.LAST_READING).remove();
+        }
+        delete localCache[DB_KEYS.LAST_READING];
     }
     renderReadingsHistory();
     renderDashboard();
@@ -1182,13 +1227,16 @@ function resetAllData() {
     if (!confirm('⚠️ آیا واقعاً می‌خواهید همه داده‌ها را حذف کنید؟ این عمل قابل بازگشت نیست!')) return;
     if (!confirm('آخرین تأیید: همه واحدها، قرائت‌ها و قبض‌ها حذف خواهند شد.')) return;
     
-    localStorage.removeItem(DB_KEYS.UNITS);
-    localStorage.removeItem(DB_KEYS.READINGS);
-    localStorage.removeItem(DB_KEYS.BILLS);
-    localStorage.removeItem(DB_KEYS.LAST_READING);
-    
-    alert('همه داده‌ها حذف شدند.');
-    location.reload();
+    if (dbRef) {
+        dbRef.remove().then(() => {
+            alert('همه داده‌ها از Firebase حذف شدند.');
+            location.reload();
+        }).catch(err => {
+            alert('خطا در حذف داده‌ها: ' + err.message);
+        });
+    } else {
+        alert('اتصال Firebase برقرار نیست. امکان حذف داده‌ها وجود ندارد.');
+    }
 }
 
 // ============================
@@ -1270,19 +1318,10 @@ function showToast(message) {
 }
 
 function init() {
-    // Start Firebase real-time sync
+    // Start Firebase real-time sync (will seed defaults if DB is empty)
     initFirebaseSync();
 
-    // Initialize default units if none exist
-    if (!getData(DB_KEYS.UNITS)) {
-        saveUnits(DEFAULT_UNITS);
-    }
-    
-    // Initialize default settings if none exist
-    if (!getData(DB_KEYS.SETTINGS)) {
-        saveSettingsData(DEFAULT_SETTINGS);
-    }
-    
+    // Initial render (will refresh once Firebase data arrives)
     renderDashboard();
     renderUnits();
     renderReadingForm();
