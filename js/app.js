@@ -8,26 +8,29 @@
 // ============================
 
 // Firebase configuration - replace with your project values
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-// Initialize Firebase
-let firebaseApp;
-let dbRef;
-try {
-    firebaseApp = firebase.initializeApp(firebaseConfig);
-    dbRef = firebase.database().ref('building_bills');
-    console.log('Firebase initialized successfully');
-} catch (e) {
-    console.error('Firebase init error:', e);
-}
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyAnf1gsGruFz7j75PcUik_1aIoW2pCA0sg",
+    authDomain: "building-bills.firebaseapp.com",
+    projectId: "building-bills",
+    storageBucket: "building-bills.firebasestorage.app",
+    messagingSenderId: "392605126029",
+    appId: "1:392605126029:web:898526b591e8bbd8ce01c4",
+    measurementId: "G-K7YFP5TH3T"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 
 const DB_KEYS = {
     UNITS: 'building_bills_units',
