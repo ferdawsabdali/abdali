@@ -20,14 +20,20 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let firebaseApp;
-let dbRef;
+let firebaseApp = null;
+let dbRef = null;
+let firebaseError = null;
 try {
-    firebaseApp = firebase.initializeApp(firebaseConfig);
-    dbRef = firebase.database().ref('building_bills');
-    console.log('Firebase initialized successfully');
+    if (typeof firebase !== 'undefined') {
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        dbRef = firebase.database().ref('building_bills');
+        console.log('✅ Firebase initialized');
+    } else {
+        throw new Error('Firebase library not loaded');
+    }
 } catch (e) {
-    console.error('Firebase init error:', e);
+    firebaseError = e.message;
+    console.error('❌ Firebase init error:', e);
 }
 
 const DB_KEYS = {
@@ -99,8 +105,16 @@ function updateSyncIndicator() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'sync-indicator';
-        el.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;padding:4px 10px;border-radius:12px;font-size:12px;font-family:Vazirmatn,sans-serif;transition:all 0.3s;';
+        el.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;padding:4px 10px;border-radius:12px;font-size:12px;font-family:Vazirmatn,sans-serif;transition:all 0.3s;cursor:pointer;';
+        el.title = 'برای بررسی وضعیت کلیک کنید';
+        el.onclick = showDiagnostics;
         document.body.appendChild(el);
+    }
+    if (firebaseError) {
+        el.textContent = '❌ خطای Firebase';
+        el.style.background = '#f8d7da';
+        el.style.color = '#721c24';
+        return;
     }
     if (!dbRef) {
         el.textContent = '⚠️ پایگاه داده محلی';
@@ -121,6 +135,26 @@ function updateSyncIndicator() {
         el.style.background = '#e2e3e5';
         el.style.color = '#383d41';
     }
+}
+
+function showDiagnostics() {
+    const existing = document.getElementById('diag-panel');
+    if (existing) { existing.remove(); return; }
+    const panel = document.createElement('div');
+    panel.id = 'diag-panel';
+    panel.style.cssText = 'position:fixed;top:40px;left:10px;z-index:9998;background:#fff;border:1px solid #ddd;border-radius:8px;padding:15px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:Vazirmatn,sans-serif;font-size:13px;max-width:320px;line-height:1.8;direction:rtl;text-align:right;';
+    const checks = [
+        ['کتابخانه Firebase', typeof firebase !== 'undefined' ? '✅ بارگذاری شد' : '❌ بارگذاری نشد'],
+        ['مقداردهی Firebase', firebaseApp ? '✅ انجام شد' : '❌ انجام نشد'],
+        ['اتصال دیتابیس', dbRef ? '✅ برقرار است' : '❌ برقرار نیست'],
+        ['خطا', firebaseError || 'ندارد'],
+        ['وضعیت همگام', firebaseReady ? '✅ متصل' : '⏳ در انتظار'],
+        ['ذخیره‌سازی محلی', '✅ فعال (پشتیبان)']
+    ];
+    panel.innerHTML = '<strong>🔍 بررسی وضعیت</strong><hr style="margin:8px 0;border:none;border-top:1px solid #eee;">' +
+        checks.map(([k,v]) => `<div><span style="color:#666">${k}:</span> <span style="font-weight:600">${v}</span></div>`).join('');
+    document.body.appendChild(panel);
+    setTimeout(() => { if(document.getElementById('diag-panel')) panel.remove(); }, 8000);
 }
 
 function setData(key, value) {
@@ -182,6 +216,10 @@ function initFirebaseSync() {
             }
             firebaseReady = true;
             updateSyncIndicator();
+        }, err => {
+            console.error('Firebase read error for', key, err);
+            firebaseReady = false;
+            updateSyncIndicator();
         });
     });
     dbRef.child('.info/connected').on('value', snap => {
@@ -189,7 +227,7 @@ function initFirebaseSync() {
             firebaseReady = true;
             updateSyncIndicator();
         }
-    });
+    }, () => {});
 }
 
 function getUnits() {
