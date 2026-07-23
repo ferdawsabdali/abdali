@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تست اتصال Firebase</title>
+    <style>
+        body { font-family: 'Vazirmatn', Tahoma, sans-serif; padding: 30px; background: #f5f5f5; direction: rtl; }
+        .box { background: #fff; padding: 25px; border-radius: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h2 { color: #333; margin-top: 0; }
+        .step { padding: 12px; margin: 8px 0; border-radius: 6px; font-size: 15px; }
+        .waiting { background: #e2e3e5; color: #383d41; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 13px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 6px; background: #4a90d9; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>🔍 تست اتصال Firebase</h2>
+        <div id="results"></div>
+        <br>
+        <button onclick="runTest()">🔄 تست مجدد</button>
+        <p style="color:#666; font-size:13px; margin-top:15px;">اگر همه موارد سبز نشد، لطفاً اسکرین‌شات این صفحه را بفرستید.</p>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnE92P9Yxi5FL01aJae9Ky83lsZ76LBLI",
+            authDomain: "abdali-34515.firebaseapp.com",
+            databaseURL: "https://abdali-34515-default-rtdb.firebaseio.com",
+            projectId: "abdali-34515",
+            storageBucket: "abdali-34515.firebasestorage.app",
+            messagingSenderId: "944530492505",
+            appId: "1:944530492505:web:65be948eb0aed249193548",
+            measurementId: "G-HQVR6ESGBK"
+        };
+
+        function log(status, text) {
+            const div = document.createElement('div');
+            div.className = 'step ' + status;
+            div.innerHTML = text;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function clearLog() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function runTest() {
+            clearLog();
+            
+            // Test 1: Library loaded
+            if (typeof firebase === 'undefined') {
+                log('error', '❌ کتابخانه Firebase بارگذاری نشد. آیا اینترنت وصل است؟');
+                return;
+            }
+            log('success', '✅ کتابخانه Firebase بارگذاری شد');
+
+            // Test 2: Initialize
+            let app;
+            try {
+                app = firebase.initializeApp(firebaseConfig);
+                log('success', '✅ Firebase مقداردهی اولیه شد');
+            } catch (e) {
+                log('error', '❌ خطا در مقداردهی Firebase:<br><pre>' + e.message + '</pre>');
+                return;
+            }
+
+            // Test 3: Database reference
+            let db;
+            try {
+                db = firebase.database().ref('test_connection');
+                log('success', '✅ اتصال به دیتابیس برقرار شد');
+            } catch (e) {
+                log('error', '❌ خطا در اتصال دیتابیس:<br><pre>' + e.message + '</pre>');
+                return;
+            }
+
+            // Test 4: Write test
+            log('waiting', '⏳ در حال نوشتن تست داده...');
+            try {
+                await db.set({ timestamp: new Date().toISOString(), test: true });
+                log('success', '✅ داده تست با موفقیت نوشته شد!');
+            } catch (e) {
+                log('error', '❌ خطا در نوشتن داده:<br><pre>' + e.message + '</pre>');
+                if (e.message.includes('permission_denied')) {
+                    log('error', '💡 راه‌حل: Rules دیتابیس را بررسی کنید — read/write باید true باشد.');
+                }
+                if (e.message.includes('database')) {
+                    log('error', '💡 راه‌حل: آیا Realtime Database را در Firebase Console ساختید؟');
+                }
+                return;
+            }
+
+            // Test 5: Read test
+            log('waiting', '⏳ در حال خواندن داده تست...');
+            try {
+                const snapshot = await db.once('value');
+                const val = snapshot.val();
+                if (val && val.test === true) {
+                    log('success', '✅ داده تست خوانده شد — همه چی درست است! 🎉');
+                } else {
+                    log('error', '⚠️ داده خوانده شد ولی محتوا غیرمنتظره بود');
+                }
+            } catch (e) {
+                log('error', '❌ خطا در خواندن داده:<br><pre>' + e.message + '</pre>');
+            }
+
+            // Cleanup
+            try { await db.remove(); } catch(e) {}
+        }
+
+        runTest();
+    </script>
+</body>
+</html>
