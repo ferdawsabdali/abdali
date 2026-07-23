@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم حساب و کتاب برق و آب ساختمان</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="main-header">
+            <h1>⚡ سیستم حساب و کتاب برق و آب ساختمان</h1>
+            <p>مدیریت مصارف برق و آب با یک متر عمومی و پنج متر فرعی</p>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="main-nav">
+            <button class="nav-btn active" onclick="showSection('dashboard', this)">📊 داشبورد</button>
+            <button class="nav-btn" onclick="showSection('units', this)">🏠 واحدها</button>
+            <button class="nav-btn" onclick="showSection('readings', this)">📝 قرائت کنتور</button>
+            <button class="nav-btn" onclick="showSection('calculations', this)">💰 محاسبات</button>
+            <button class="nav-btn" onclick="showSection('bills', this)">🧾 قبض‌ها</button>
+            <button class="nav-btn" onclick="showSection('settings', this)">⚙️ تنظیمات</button>
+        </nav>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="section active">
+            <div class="cards-grid">
+                <div class="card stat-card">
+                    <div class="stat-icon">🏠</div>
+                    <div class="stat-info">
+                        <h3>تعداد واحدها</h3>
+                        <p class="stat-value" id="totalUnits">5</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-info">
+                        <h3>متر عمومی برق</h3>
+                        <p class="stat-value" id="mainMeterStatus">فعال</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon">💧</div>
+                    <div class="stat-info">
+                        <h3>متر عمومی آب</h3>
+                        <p class="stat-value" id="waterMeterStatus">فعال</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon">🧾</div>
+                    <div class="stat-info">
+                        <h3>قبض‌های صادر شده</h3>
+                        <p class="stat-value" id="totalBills">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card latest-info">
+                <h2>📋 آخرین قرائت‌ها</h2>
+                <div class="table-responsive">
+                    <table id="latestReadingsTable">
+                        <thead>
+                            <tr>
+                                <th>دوره</th>
+                                <th>تاریخ</th>
+                                <th>متر عمومی برق</th>
+                                <th>مجموع فرعی‌ها</th>
+                                <th>تفاوت</th>
+                                <th>وضعیت</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p class="empty-message" id="noReadingsMsg">هنوز قرائتی ثبت نشده است. لطفاً از بخش "قرائت کنتور" اقدام کنید.</p>
+            </div>
+        </section>
+
+        <!-- Units Section -->
+        <section id="units" class="section">
+            <div class="card">
+                <div class="section-header">
+                    <h2>🏠 مدیریت واحدها</h2>
+                    <button class="btn btn-primary" onclick="showAddUnitModal()">➕ افزودن واحد</button>
+                </div>
+                <div class="table-responsive">
+                    <table id="unitsTable">
+                        <thead>
+                            <tr>
+                                <th>شماره واحد</th>
+                                <th>نام صاحب خانه</th>
+                                <th>متر برق فرعی</th>
+                                <th>شماره تماس</th>
+                                <th>عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Readings Section -->
+        <section id="readings" class="section">
+            <div class="card">
+                <div class="section-header">
+                    <h2>📝 ثبت قرائت کنتور</h2>
+                    <button class="btn btn-secondary" onclick="loadPreviousReading()">📥 بارگذاری قرائت قبلی</button>
+                </div>
+                
+                <form id="readingForm" onsubmit="submitReading(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="period">دوره مصرف (مثلاً: تیر ۱۴۰۳)</label>
+                            <input type="text" id="period" required placeholder="مثال: تیر ۱۴۰۳">
+                        </div>
+                        <div class="form-group">
+                            <label for="readingDate">تاریخ قرائت</label>
+                            <input type="date" id="readingDate" required>
+                        </div>
+                    </div>
+
+                    <div class="meter-section">
+                        <h3>⚡ کنتور برق</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mainElectricityCurrent">متر عمومی برق - رقم فعلی</label>
+                                <input type="number" id="mainElectricityCurrent" required min="0" step="0.01" placeholder="رقم فعلی متر عمومی">
+                            </div>
+                            <div class="form-group">
+                                <label for="mainElectricityPrevious">متر عمومی برق - رقم قبلی</label>
+                                <input type="number" id="mainElectricityPrevious" min="0" step="0.01" placeholder="رقم قبلی متر عمومی">
+                            </div>
+                        </div>
+                        
+                        <div id="subElectricityMeters">
+                            <h4>مترهای فرعی برق:</h4>
+                            <!-- Generated by JS -->
+                        </div>
+                    </div>
+
+                    <div class="meter-section">
+                        <h3>💧 کنتور آب</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mainWaterCurrent">متر عمومی آب - رقم فعلی</label>
+                                <input type="number" id="mainWaterCurrent" required min="0" step="0.01" placeholder="رقم فعلی متر عمومی">
+                            </div>
+                            <div class="form-group">
+                                <label for="mainWaterPrevious">متر عمومی آب - رقم قبلی</label>
+                                <input type="number" id="mainWaterPrevious" min="0" step="0.01" placeholder="رقم قبلی متر عمومی">
+                            </div>
+                        </div>
+                        
+                        <div class="info-box" style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 8px; padding: 15px; margin-top: 15px;">
+                            <p>💡 <strong>نکته:</strong> مصرف آب از متر عمومی محاسبه شده و به طور مساوی بین همه واحدها تقسیم می‌شود.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-large">💾 ثبت قرائت و محاسبه</button>
+                        <button type="reset" class="btn btn-secondary">پاک کردن</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>📋 تاریخچه قرائت‌ها</h2>
+                <div class="table-responsive">
+                    <table id="readingsHistoryTable">
+                        <thead>
+                            <tr>
+                                <th>دوره</th>
+                                <th>تاریخ</th>
+                                <th>مصرف عمومی برق</th>
+                                <th>مجموع فرعی برق</th>
+                                <th>مصرف عمومی آب</th>
+                                <th>عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Calculations Section -->
+        <section id="calculations" class="section">
+            <div class="card">
+                <div class="section-header">
+                    <h2>💰 محاسبه هزینه‌ها</h2>
+                    <select id="calcPeriodSelect" onchange="loadCalculation()">
+                        <option value="">انتخاب دوره...</option>
+                    </select>
+                </div>
+                
+                <div id="calculationResult">
+                    <p class="empty-message">لطفاً یک دوره را انتخاب کنید یا ابتدا قرائت جدید ثبت کنید.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bills Section -->
+        <section id="bills" class="section">
+            <div class="card">
+                <div class="section-header">
+                    <h2>🧾 مدیریت قبض‌ها</h2>
+                    <select id="billPeriodSelect" onchange="loadBills()">
+                        <option value="">انتخاب دوره...</option>
+                    </select>
+                </div>
+                
+                <div id="billsContainer">
+                    <p class="empty-message">لطفاً یک دوره را انتخاب کنید.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settings" class="section">
+            <div class="card">
+                <h2>⚙️ تنظیمات تعرفه‌ها</h2>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="electricityRate">نرخ برق (هر کیلووات ساعت)</label>
+                            <input type="number" id="electricityRate" required min="0" step="0.01" value="2500">
+                        </div>
+                        <div class="form-group">
+                            <label for="waterRate">نرخ آب (هر متر مکعب)</label>
+                            <input type="number" id="waterRate" required min="0" step="0.01" value="5000">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="buildingName">نام ساختمان</label>
+                            <input type="text" id="buildingName" value="ساختمان مسکونی">
+                        </div>
+                        <div class="form-group">
+                            <label for="managerName">نام مدیر ساختمان</label>
+                            <input type="text" id="managerName" value="">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="address">آدرس ساختمان</label>
+                        <textarea id="address" rows="2"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">💾 ذخیره تنظیمات</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card backup-zone">
+                <h2>💾 پشتیبان‌گیری</h2>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="exportBackup()">📥 خروجی JSON</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">📤 ورودی JSON</button>
+                    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
+                </div>
+                <p class="hint">همه داده‌ها (واحدها، قرائت‌ها، قبض‌ها و تنظیمات) در یک فایل JSON ذخیره یا بازیابی می‌شوند.</p>
+            </div>
+
+            <div class="card danger-zone">
+                <h2>⚠️ zone خطر</h2>
+                <button class="btn btn-danger" onclick="resetAllData()">🗑️ حذف تمام داده‌ها</button>
+                <p class="hint">این عمل قابل بازگشت نیست!</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal for Unit Management -->
+    <div id="unitModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">افزودن واحد جدید</h3>
+                <button class="close-btn" onclick="closeUnitModal()">&times;</button>
+            </div>
+            <form id="unitForm" onsubmit="saveUnit(event)">
+                <input type="hidden" id="unitId">
+                <div class="form-group">
+                    <label for="unitNumber">شماره واحد</label>
+                    <input type="text" id="unitNumber" required placeholder="مثال: ۱ یا واحد شمالی">
+                </div>
+                <div class="form-group">
+                    <label for="ownerName">نام صاحب خانه</label>
+                    <input type="text" id="ownerName" required placeholder="نام و نام خانوادگی">
+                </div>
+                <div class="form-group">
+                    <label for="electricityMeterNumber">شماره متر برق فرعی</label>
+                    <input type="text" id="electricityMeterNumber" placeholder="شماره متر">
+                </div>
+                <div class="form-group">
+                    <label for="phoneNumber">شماره تماس</label>
+                    <input type="tel" id="phoneNumber" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">💾 ذخیره</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeUnitModal()">انصراف</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Image Preview Modal -->
+    <div id="imageModal" class="modal" style="z-index: 10000;">
+        <div class="modal-content" style="max-width: 90%; max-height: 90vh; display: flex; flex-direction: column; align-items: center;">
+            <div class="modal-header" style="width: 100%;">
+                <h3>📷 پیش‌نمایش عکس</h3>
+                <button class="close-btn" onclick="closeImageModal()">&times;</button>
+            </div>
+            <div style="padding: 15px; overflow: auto;">
+                <img id="imageModalImg" src="" alt="عکس" style="max-width: 100%; max-height: 70vh; border-radius: 8px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Bill Print Modal -->
+    <div id="billPrintModal" class="modal print-modal">
+        <div class="modal-content bill-print-content">
+            <div class="modal-header">
+                <h3>پیش‌نمایش قبض</h3>
+                <button class="close-btn" onclick="closeBillPrintModal()">&times;</button>
+            </div>
+            <div id="billPrintBody"></div>
+            <div class="form-actions no-print">
+                <button class="btn btn-primary" onclick="printCurrentBill()">🖨️ پرینت</button>
+                <button class="btn btn-secondary" onclick="closeBillPrintModal()">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
